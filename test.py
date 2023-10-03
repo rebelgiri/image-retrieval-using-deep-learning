@@ -1,29 +1,15 @@
-from tensorflow import keras
-import argparse
 import tensorflow as tf
-import tensorboard
-import random
 import tensorflow_datasets as tfds
-import torch
-from torch.utils.tensorboard import SummaryWriter
-
-
-
-input_shape = (28, 28, 1)
-input_reshape = [1, 28, 28, 1]
-
-from datetime import datetime
-
-
-writer = SummaryWriter()
-
-
+import numpy as np
+from sklearn.manifold import TSNE
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
 
 
 def normalize_img(image, label):
     """Normalizes images: `uint8` -> `float32`."""
     return tf.cast(image, tf.float32) / 255., label
-
     
 def get_dataset(dataset_name):
 
@@ -58,46 +44,48 @@ def get_dataset(dataset_name):
 
 def main():
 
-    model = tf.keras.models.load_model('model_20230308-205254.h5')
+    model = tf.keras.models.load_model('model_20230312-105140.h5')
     model.summary()
 
     (ds_train, ds_val, ds_test), ds_info = get_dataset('fashion_mnist')
-    ds_test = ds_test.batch(100)
+    ds_test = ds_test.batch(1)
 
-    for i in range(1):
-        # testing
-        # accumulate tensors for embeddings visualization
-        test_imgs = []
-        test_targets = []
-        hash_embeddings = []
-        embeddings = []
-        for images, labels in ds_test:
-            logits = model(images)
-            # show all images that consist the pairs
-            test_imgs.extend([logits[0:5]])
-            test_targets.extend([labels[0:5]])
+    hash_array = []
+    labels = []
+    for image, label in ds_test:
+        logits = model(image)
+        # Hamming space embedding
+        embedding = tf.round(tf.clip_by_value(logits, clip_value_min=-1, clip_value_max=1) * 0.5 + 0.5)
+        hash_array = embedding.numpy() if not len(hash_array) else np.vstack((hash_array, embedding.numpy()))
+        labels = label.numpy() if not len(labels) else np.vstack((labels, label.numpy()))
 
-            # embedding1: hamming space embedding
-            hash = tf.round(tf.clip_by_value(logits, clip_value_min=-1, clip_value_max=1) * 0.5 + 0.5)
-            hash_embeddings.extend([hash[0:5]])
+    print(hash_array.shape)
+        
 
-            # emgedding2: raw embedding
-            embeddings.extend([logits[0:5]])
+    # We want to get TSNE embedding with 2 dimensions
+    n_components = 2
+    tsne = TSNE(n_components)
+    tsne_result = tsne.fit_transform(hash_array)
+    tsne_result.shape
 
-        writer.add_histogram(
-                'embedding_distribution',
-                tf.concat(embeddings, 0).numpy(),
-                global_step=i + 1)
+    # Plot the result of our TSNE with the label color coded
+    # A lot of the stuff here is about making the plot look pretty and not TSNE
+    tsne_result_df = pd.DataFrame({'x': tsne_result[:,0].flatten(), 'y': tsne_result[:,1].flatten(), 
+                                   'label': labels.flatten()})
+    fig, ax = plt.subplots(1)
+    sns.scatterplot(x='x', y='y', hue='label', data=tsne_result_df, ax=ax, s=120)
+    lim = (tsne_result.min()-5, tsne_result.max()+5)
+    ax.set_xlim(lim)
+    ax.set_ylim(lim)
+    ax.set_aspect('equal')
+    ax.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.0)
 
-        # draw embeddings for a single batch - very nice for visualizing clusters
-        writer.add_embedding(
-                tf.concat(hash_embeddings, 0),
-                metadata=tf.concat(test_targets, 0),
-                label_img=tf.concat(test_imgs, 0),
-                global_step=i + 1)
+    plt.savefig('result.png')
+        
+
+    plt.close(fig)
 
 
-        writer.close()
 
 
             

@@ -10,7 +10,7 @@ momentum = 0.9
 weight_decay = 0.004
 code_length = 8
 MARGIN = 2 * code_length
-total_epochs = 200
+total_epochs =  1000
 input_shape = (28, 28, 1)
 input_reshape = [1, 28, 28, 1]
 lr_init = 3e-4
@@ -214,7 +214,7 @@ def main():
             writer.flush()
 
 
-    model.save('model_' + timestamp + '.h5')
+            model.save('model_' + timestamp + '.h5')
 
 
             
